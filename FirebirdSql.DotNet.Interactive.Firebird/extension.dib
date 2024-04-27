@@ -1,0 +1,3 @@
+#!csharp
+
+FirebirdSql.DotNet.Interactive.Firebird.FirebirdKernel.AddFirebirdKernelConnectorToCurrentRoot();
