@@ -108,6 +108,8 @@ public class FirebirdKernel
             yield return table;
         } while (reader.NextResult());
 
+        yield break;
+
         void ResolveColumnNameClashes(string[] names)
         {
             var nameCounts = new Dictionary<string, int>(capacity: names.Length);
@@ -132,9 +134,11 @@ public class FirebirdKernel
         kernel.AddKernelConnector(new ConnectFirebirdCommand());
 
         KernelInvocationContext.Current?.Display(
-            new HtmlString(@"<details><summary>Query Firebird databases.</summary>
-    <p>This extension adds support for connecting to Firebird databases using the <code>#!connect firebird</code> magic command. For more information, run a cell using the <code>#!sql</code> magic command.</p>
-    </details>"),
+            new HtmlString("""
+                           <details><summary>Query Firebird databases.</summary>
+                               <p>This extension adds support for connecting to Firebird databases using the <code>#!connect firebird</code> magic command. For more information, run a cell using the <code>#!sql</code> magic command.</p>
+                               </details>
+                           """),
             "text/html");
     }
 

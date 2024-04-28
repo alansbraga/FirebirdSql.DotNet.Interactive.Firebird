@@ -1,0 +1,54 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"languageName":"csharp","name":"csharp"},{"aliases":[],"languageName":"Firebird","name":"sql-base"}]}}
+
+#!markdown
+
+# Simple Sample
+
+Just a simple query using employee database that comes with all firebird defaul installation.
+
+**Warning**: First use BuildPackage.dib to build package and update the next cell with the correct path
+
+#!csharp
+
+#i "C:\tmp\FirebirdKernel"
+#r "nuget:FirebirdSql.DotNet.Interactive.Firebird"
+
+#!csharp
+
+var builder = new FirebirdSql.Data.FirebirdClient.FbConnectionStringBuilder();
+builder.Database = @"employee";
+builder.Password = "masterkey";
+builder.UserID = "SYSDBA";
+builder.DataSource = "localhost";
+var connectionString = builder.ConnectionString;
+
+#!csharp
+
+#!connect firebird -h
+
+#!csharp
+
+#!connect firebird --kernel-name "employeebase" @csharp:connectionString
+
+#!sql
+
+#!sql-employeebase --name tableNames
+select rdb$relation_name "Name"
+  from rdb$relations
+  where rdb$system_flag = 0
+    and rdb$relation_type = 0
+
+#!csharp
+
+#!share --from sql-employeebase tableNames
+
+#!sql-base
+
+#!sql-employeebase --name sales
+select * from sales
+
+#!csharp
+
+#!share --from sql-employeebase sales

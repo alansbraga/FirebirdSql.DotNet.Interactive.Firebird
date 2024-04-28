@@ -1,0 +1,83 @@
+#!meta
+
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"languageName":"csharp","name":"csharp"}]}}
+
+#!markdown
+
+# Building Nuget Package
+
+This notebook helps you to build the nuget package to load into any Polyglot Notebooks.
+
+First it is going  to clear nuget cache directory to avoid loading the wrong version.
+
+Build de nuget package and put it on a folder accessible to your Polyglot Notebooks.
+
+#!markdown
+
+## Clearing Nuget Cache
+
+If you don't change the package version the Notebook usually don't you the last compiled package on your folder.
+
+To avoid this problems and avoid changing version every single test, next cell will delete the cache folder.
+
+**Warning**: If the folder is in use click to restart your opened notebooks.
+
+#!csharp
+
+using System.IO;
+
+var baseCacheFolder = Microsoft.DotNet.Interactive.Utility.Paths.NugetCache;
+var nugetFolder = Path.Combine(baseCacheFolder, "FirebirdSql.DotNet.Interactive.Firebird");
+
+if (Directory.Exists(nugetFolder))
+{
+    Directory.Delete(nugetFolder, true);
+}
+
+#!markdown
+
+## Build Package
+
+The following cells use powershell to build the packages and put it on a folder available for your notebooks.
+
+**Attention**: next cell you have to define the destination folder.
+
+#!pwsh
+
+$destinationFolder = "/tmp/FirebirdKernel"
+$startFolder = Get-Location
+
+#!pwsh
+
+Set-Location $startFolder
+Set-Location "../src/"
+
+if (Test-Path $destinationFolder) {
+    Remove-Item $destinationFolder -Recurse -Force
+}
+$destinationObject = New-Item $destinationFolder -Type Directory
+$referenceFolder = $destinationObject.FullName
+
+dotnet clean
+dotnet build
+dotnet pack -o $referenceFolder
+Set-Location $startFolder
+
+#!markdown
+
+## How to Reference
+
+On your notebook you have to reference the new created folder.
+
+To help you with that execute the next cell and copy the content of the results.
+
+#!csharp
+
+#!set --value @pwsh:referenceFolder --name referenceFolder
+
+var sb = new StringBuilder();
+sb.Append("#i \"");
+sb.Append(referenceFolder);
+sb.AppendLine("\"");
+sb.AppendLine("#r \"nuget:FirebirdSql.DotNet.Interactive.Firebird\"");
+sb.ToString()
