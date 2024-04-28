@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.CommandLine.Parsing;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
@@ -7,32 +9,39 @@ using FirebirdSql.Data.FirebirdClient;
 using Microsoft.AspNetCore.Html;
 using Microsoft.DotNet.Interactive;
 using Microsoft.DotNet.Interactive.Commands;
+using Microsoft.DotNet.Interactive.Events;
 using Microsoft.DotNet.Interactive.Formatting.TabularData;
+using Microsoft.DotNet.Interactive.ValueSharing;
 using Enumerable = System.Linq.Enumerable;
 
 namespace FirebirdSql.DotNet.Interactive.Firebird;
 
-public class FirebirdKernel :
-    Kernel,
-    IKernelCommandHandler<SubmitCode>
+public class FirebirdKernel 
+    : Kernel
+    , IKernelCommandHandler<SubmitCode>
+    , IKernelCommandHandler<RequestValue>
+    , IKernelCommandHandler<RequestValueInfos>
 {
-    private readonly string _connectionString;
-    private IEnumerable<IEnumerable<IEnumerable<(string name, object value)>>> _tables;
+    private readonly string connectionString;
+    private IEnumerable<IEnumerable<IEnumerable<(string name, object value)>>> tables;
+    private readonly Dictionary<string, object> resultSets = new(StringComparer.Ordinal);
+    private ChooseFirebirdKernelDirective chooseKernelDirective;
 
     public FirebirdKernel(string name, string connectionString) : base(name)
     {
         KernelInfo.LanguageName = "Firebird";
         KernelInfo.Description ="""
                                 This kernel is backed by a Firebird database.
-                                It can execute SQL statements against the database and display the results as tables.
+                                It can execute SQL statements against the database, display the results as tables and share the results.
                                 """;
                                 
-        _connectionString = connectionString;
+        this.connectionString = connectionString;
     }
 
+    public override ChooseKernelDirective ChooseKernelDirective => chooseKernelDirective ??= new(this);
     private DbConnection OpenConnection()
     {
-        return new FbConnection(_connectionString);
+        return new FbConnection(connectionString);
     }
 
     async Task IKernelCommandHandler<SubmitCode>.HandleAsync(
@@ -49,15 +58,25 @@ public class FirebirdKernel :
 
         dbCommand.CommandText = submitCode.Code;
 
-        _tables = Execute(dbCommand);
+        tables = Execute(dbCommand);
+        var results = new List<TabularDataResource>();
 
-        foreach (var table in _tables)
+        try
         {
-            var tabularDataResource = table.ToTabularDataResource();
+            foreach (var table in tables)
+            {
+                var tabularDataResource = table.ToTabularDataResource();
+                results.Add(tabularDataResource);
 
-            var explorer = DataExplorer.CreateDefault(tabularDataResource);
-            context.Display(explorer);
+                var explorer = DataExplorer.CreateDefault(tabularDataResource);
+                context.Display(explorer);
+            }
         }
+        finally
+        {
+            StoreQueryResults(results, submitCode.KernelChooserParseResult);
+        }
+
     }
 
     private IEnumerable<IEnumerable<IEnumerable<(string name, object value)>>> Execute(IDbCommand command)
@@ -125,6 +144,72 @@ public class FirebirdKernel :
             context.HandlingKernel.RootKernel is CompositeKernel root)
         {
             FirebirdKernel.AddFirebirdKernelConnectorTo(root);
+        }
+    }
+
+    public Task HandleAsync(RequestValue command, KernelInvocationContext context)
+    {
+        if (TryGetValue<object>(command.Name, out var value))
+        {
+            context.PublishValueProduced(command, value);
+        }
+        else
+        {
+            context.Fail(command, message: $"Value '{command.Name}' not found in kernel {Name}");
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void StoreQueryResultSet(string name, IReadOnlyCollection<TabularDataResource> queryResultSet)
+    {
+        resultSets[name] = queryResultSet;
+    }
+
+    private bool TryGetValue<T>(string name, out T value)
+    {
+        if (resultSets.TryGetValue(name, out var resultSet) &&
+            resultSet is T resultSetT)
+        {
+            value = resultSetT;
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    private void StoreQueryResults(IReadOnlyCollection<TabularDataResource> results, ParseResult commandKernelChooserParseResult)
+    {
+        var chooser = chooseKernelDirective;
+        var name = commandKernelChooserParseResult?.GetValueForOption(chooser.NameOption);
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            StoreQueryResultSet(name, results);
+        }
+    }
+
+    public Task HandleAsync(RequestValueInfos command, KernelInvocationContext context)
+    {
+        var valueInfos = CreateKernelValueInfos(resultSets, command.MimeType).ToArray();
+
+        context.Publish(new ValueInfosProduced(valueInfos, command));
+
+        return Task.CompletedTask;
+
+        static IEnumerable<KernelValueInfo> CreateKernelValueInfos(IReadOnlyDictionary<string, object> source, string mimeType)
+        {
+            return source.Keys.Select(key =>
+            {
+                var formattedValues = FormattedValue.CreateSingleFromObject(
+                    source[key],
+                    mimeType);
+
+                return new KernelValueInfo(
+                    key,
+                    formattedValues,
+                    type: typeof(IEnumerable<TabularDataResource>));
+            });
         }
     }
 }

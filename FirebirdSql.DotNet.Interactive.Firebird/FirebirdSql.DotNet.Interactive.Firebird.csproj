@@ -8,10 +8,9 @@
         <PackageTags>polyglot notebook dotnet interactive SQL Firebird Data</PackageTags>
         <PackageId>FirebirdSql.DotNet.Interactive.Firebird</PackageId>
         <IncludeBuildOutput>true</IncludeBuildOutput>
-        <Version>0.0.0.1</Version>        
+        <Version>0.0.0.2</Version>        
         <NoWarn>$(NoWarn);NU5100;VSTHRD002</NoWarn>
         <LangVersion>latest</LangVersion>
-        <!-- dll outside of lib/ folder -->
     </PropertyGroup>
 
     <ItemGroup>

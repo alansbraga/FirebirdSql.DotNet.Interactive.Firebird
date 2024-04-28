@@ -25,6 +25,7 @@ public class ConnectFirebirdCommand : ConnectKernelCommand
         var connectionString = commandLineContext.ParseResult.GetValueForArgument(ConnectionStringArgument);
         var localName = commandLineContext.ParseResult.GetValueForOption(KernelNameOption);
         var kernel = new FirebirdKernel($"sql-{localName}", connectionString);
+        kernel.UseValueSharing();
         return Task.FromResult<IEnumerable<Kernel>>(new[] { kernel });
     }
 }
