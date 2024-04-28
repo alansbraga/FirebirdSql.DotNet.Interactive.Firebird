@@ -49,6 +49,7 @@ $startFolder = Get-Location
 
 #!pwsh
 
+$ErrorActionPreference = "Stop"
 Set-Location $startFolder
 Set-Location "../src/"
 

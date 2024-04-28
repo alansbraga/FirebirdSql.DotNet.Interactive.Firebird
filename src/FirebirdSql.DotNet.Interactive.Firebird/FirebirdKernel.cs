@@ -21,10 +21,12 @@ public class FirebirdKernel
     , IKernelCommandHandler<SubmitCode>
     , IKernelCommandHandler<RequestValue>
     , IKernelCommandHandler<RequestValueInfos>
+    , IKernelCommandHandler<SendValue>
 {
     private readonly string connectionString;
     private IEnumerable<IEnumerable<IEnumerable<(string name, object value)>>> tables;
     private readonly Dictionary<string, object> resultSets = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, object> variables = new(StringComparer.Ordinal);
     private ChooseFirebirdKernelDirective chooseKernelDirective;
 
     public FirebirdKernel(string name, string connectionString) : base(name)
@@ -57,6 +59,7 @@ public class FirebirdKernel
         await using var dbCommand = connection.CreateCommand();
 
         dbCommand.CommandText = submitCode.Code;
+        CreateParameters(dbCommand, context);
 
         tables = Execute(dbCommand);
         var results = new List<TabularDataResource>();
@@ -77,6 +80,19 @@ public class FirebirdKernel
             StoreQueryResults(results, submitCode.KernelChooserParseResult);
         }
 
+    }
+
+    private void CreateParameters(DbCommand dbCommand, KernelInvocationContext context)
+    {
+        foreach (var v in variables)
+        {
+            context.Display($"Creating parameter {v.Key} with value {v.Value}", new []{ "text/plain" });
+            var p = dbCommand.CreateParameter();
+            p.Value = v.Value;
+            p.ParameterName = v.Key;
+            dbCommand.Parameters.Add(p);
+        }
+        
     }
 
     private IEnumerable<IEnumerable<IEnumerable<(string name, object value)>>> Execute(IDbCommand command)
@@ -195,29 +211,46 @@ public class FirebirdKernel
 
     public Task HandleAsync(RequestValueInfos command, KernelInvocationContext context)
     {
-        var valueInfos = CreateKernelValueInfos(resultSets, command.MimeType).ToArray();
+        var valueInfos = CreateKernelValueInfos(resultSets, command.MimeType, true)
+            .Concat(CreateKernelValueInfos(variables, command.MimeType, false))
+            .ToArray();
 
         context.Publish(new ValueInfosProduced(valueInfos, command));
 
         return Task.CompletedTask;
 
-        static IEnumerable<KernelValueInfo> CreateKernelValueInfos(IReadOnlyDictionary<string, object> source, string mimeType)
+        static IEnumerable<KernelValueInfo> CreateKernelValueInfos(IReadOnlyDictionary<string, object> source, string mimeType, bool resultSet)
         {
             return source.Keys.Select(key =>
             {
                 var formattedValues = FormattedValue.CreateSingleFromObject(
                     source[key],
                     mimeType);
+                
+                var type = resultSet
+                    ? typeof(IEnumerable<TabularDataResource>)
+                    : source[key]?.GetType() ?? typeof(object);
 
                 return new KernelValueInfo(
                     key,
                     formattedValues,
-                    type: typeof(IEnumerable<TabularDataResource>));
+                    type: type);
             });
         }
     }
-}
 
-public class SqlRow : Dictionary<string, object>
-{
+    public Task HandleAsync(SendValue command, KernelInvocationContext context)
+    {
+        context.Display($"Setting variable {command.Name} to {command.Value}", new []{ "text/plain" });
+        var value = command.Value;
+        if (value is PasswordString ps)
+        {
+            value = ps.GetClearTextPassword();
+        }
+
+
+        variables[command.Name] = value;
+        return Task.CompletedTask;
+
+    }
 }

@@ -1,6 +1,6 @@
 #!meta
 
-{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"languageName":"csharp","name":"csharp"},{"aliases":[],"languageName":"Firebird","name":"sql-base"}]}}
+{"kernelInfo":{"defaultKernelName":"csharp","items":[{"aliases":[],"languageName":"csharp","name":"csharp"},{"aliases":[],"languageName":"Firebird","name":"sql-base"},{"aliases":[],"languageName":"Firebird","name":"sql-employeebase"}]}}
 
 #!markdown
 
@@ -44,11 +44,25 @@ select rdb$relation_name "Name"
 
 #!share --from sql-employeebase tableNames
 
+#!csharp
+
+var rep = 11;
+
 #!sql-base
 
 #!sql-employeebase --name sales
+#!share --from csharp rep --as represent
 select * from sales
+where sales_rep = @represent
+
+#!sql-base
+
+#!sql-employeebase --name sales
 
 #!csharp
 
 #!share --from sql-employeebase sales
+
+#!csharp
+
+sales
